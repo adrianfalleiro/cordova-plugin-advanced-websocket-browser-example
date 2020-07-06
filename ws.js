@@ -5,9 +5,21 @@ const wss = new WebSocketServer({ port: port });
 
 console.log('listening on port: ' + port);
 
-wss.on('connection', function connection(ws) {
+function noop() {}
 
-  ws.on('message', function (message) {
+function heartbeat() {
+  this.isAlive = true;
+}
+
+
+wss.on('connection', ws => {
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    console.log('received pong');
+    ws.isAlive = true
+  });
+
+  ws.on('message', message => {
 
     if (message === 'close') {
       ws.close(1000, 'connection closed');
@@ -15,9 +27,22 @@ wss.on('connection', function connection(ws) {
       console.log('message: ' + message);
       ws.send('echo: ' + message);
     }
+    
   });
 
   console.log('new client connected!');
   ws.send('connected!');
 
 });
+
+const interval = setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.isAlive === false) return ws.terminate();
+
+    ws.isAlive = false;
+    console.log('sending ping');
+    ws.ping(noop);
+  });
+}, 30000);
+
+wss.on('close', () => clearInterval(interval));
